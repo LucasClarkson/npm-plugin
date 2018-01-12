@@ -6,7 +6,6 @@ var fs = require('fs');
 var glob = require("glob");
 var Promise = require('bluebird');
 var request = Promise.promisify(require('request'));
-var execSync = require('child_process').execSync;
 
 var packageJsonText = "package.json";
 var nodeModules = "node_modules";
@@ -116,14 +115,6 @@ WsNodeReportBuilder.traverseLsJson = function (allDependencies) {
 	var invalidDeps = [];
 	var parseData = allDependencies;
 	var scrubbed = traverse(parseData).paths();
-    var cmd = "npm get registry";
-    var registryUrl;
-    try {
-        registryUrl = execSync(cmd);
-    } catch (e) {
-        // do nothing
-    }
-    registryUrl = registryUrl.toString().substring(0, registryUrl.length - 1);
 
 	// Create "endsWith" function for node version 0.10.x and earlier.
 	String.prototype.endsWith = String.prototype.endsWith || function (str) {
@@ -271,63 +262,48 @@ WsNodeReportBuilder.traverseLsJson = function (allDependencies) {
 					foundedShasum++;
 				} else if (!invalidProj && dataObjPointer && packageJson._resolved) {
 					// Query the npm registry for ths package sha1
-                    var registryPackageUrl;
-                    if (registryUrl != null && resolved.indexOf(registryUrl) > -1) {
-                        registryPackageUrl = registryUrl + packageJson.name;
-					} else {
-                        var urlName = "/" + packageJson.name;
-                        var regexRegistry = new RegExp("(.*)\/[^A-Za-z0-9\/].*");
-						var resultOfMatch = resolved.match(regexRegistry);
-						if (resultOfMatch != null) {
-							registryPackageUrl = resultOfMatch[1];
-						}
-						var regexToFindIfPackageNameInclude = new RegExp(".*\/" + packageJson.name + "$");
-						if (registryPackageUrl.match(regexToFindIfPackageNameInclude) == null) {
-                            registryPackageUrl = registryPackageUrl + urlName;
-						}
-					}
-
+					var urlName = "/" + packageJson.name;
+					var registryPackageUrl = resolved.substring(0, resolved.indexOf(urlName) + urlName.length);
 					let url = registryPackageUrl + "/" + packageJson.version;
 					if (url.indexOf('@') > -1) {
 						var slashIndex = registryPackageUrl.lastIndexOf("/");
 						url = registryPackageUrl.substring(0,slashIndex) + "%2F" + registryPackageUrl.substring(slashIndex + 1) + '?' + packageJson.version;
 					}
+
 					let promisePackageJson = packageJson;
 					let promisePath = path;
 					let promiseDataObjPointer = dataObjPointer;
 					let promise = request(url, {timeout: 30000})
 						.then(function (response) {
-                            var postUrl = response.request.href;
-                            if (response.statusCode !== 200) {
-                                console.error("Cannot obtain sha1 from " + postUrl);
-                                cli.info('Missing : ' + promisePackageJson.name);
-                                missingShasum++;
-                            } else {
-                                const body = response.body;
-                                var registryResponse = JSON.parse(body);
-                                if (postUrl.indexOf("%2F") > -1) {
-                                    var version = postUrl.substring(postUrl.lastIndexOf('?') + 1);
-                                    registryResponse = registryResponse.versions[version];
-                                }
+							var postUrl = response.request.href;
+							if (response.statusCode !== 200) {
+								throw Error("URL: " + postUrl + "          \nError:  " + response.statusMessage );
+							}
 
-                                if (registryResponse.dist && registryResponse.dist.shasum) {
-                                    foundedShasum++;
-                                    if (promisePackageJson._resolved) {
-                                        promiseDataObjPointer.resolved = promisePackageJson._resolved.substring(promisePackageJson._resolved.lastIndexOf(SLASH) + 1);
-                                    }
-                                    const shasum = registryResponse.dist.shasum;
-                                    promiseDataObjPointer.sha1 = shasum;
-                                    promiseDataObjPointer.shasum = shasum;
-                                    promisePath.shasum = shasum;
-                                    promisePath.sha1 = shasum;
-                                    // console.log("Got a response: ", shasum);
-                                } else {
-                                    console.error("Response from " + postUrl + " does not contain the object 'shasum' under 'dist'");
-                                    cli.info('Missing : ' + promisePackageJson.name);
-                                    missingShasum++;
-                                }
-                            }
-                        })
+							const body = response.body;
+							var registryResponse = JSON.parse(body);
+							if (postUrl.indexOf("%2F") > -1) {
+								var version = postUrl.substring(postUrl.lastIndexOf('?') + 1);
+								registryResponse = registryResponse.versions[version];
+							}
+
+							if (registryResponse.dist && registryResponse.dist.shasum) {
+								foundedShasum++;
+								if (promisePackageJson._resolved) {
+									promiseDataObjPointer.resolved = promisePackageJson._resolved.substring(promisePackageJson._resolved.lastIndexOf(SLASH) + 1);
+								}
+								const shasum = registryResponse.dist.shasum;
+								promiseDataObjPointer.sha1 = shasum;
+								promiseDataObjPointer.shasum = shasum;
+								promisePath.shasum = shasum;
+								promisePath.sha1 = shasum;
+								// console.log("Got a response: ", shasum);
+							} else {
+								console.error("Response from " + postUrl + " does not contain the object 'shasum' under 'dist'");
+								cli.info('Missing : ' + promisePackageJson.name);
+								missingShasum++;
+							}
+						})
 						.catch(function (error) {
 							// var missingPackage = "" + obj.name + " is missing";
 							if (error.code === timeoutError || error.code === socketTimeoutError) {
