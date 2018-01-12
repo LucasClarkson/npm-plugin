@@ -154,6 +154,7 @@ WsNodeReportBuilder.traverseLsJson = function (allDependencies, registryAccessTo
 
 	var requestPromises = [];
 	var sha1sMap = {};
+	var nameToVersionMap = {};
 
 	for (var i = 0; i < scrubbed.length; i++) {
 		var path = scrubbed[i];
@@ -287,6 +288,7 @@ WsNodeReportBuilder.traverseLsJson = function (allDependencies, registryAccessTo
                             registryPackageUrl = registryPackageUrl + urlName;
 						}
 					}
+                    nameToVersionMap[packageJson.name] = packageJson.version;
 					let url = registryPackageUrl + "/" + packageJson.version;
                     var privateRegistry = false;
                     if(url.indexOf(constants.NPM_REGISTRY) === -1) {
