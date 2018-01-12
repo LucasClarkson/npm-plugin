@@ -33,7 +33,6 @@ var timeout = 3600000;
 var isDebugMode = false;
 var isFailOnConnectionError = true;
 var connectionRetries = 1;
-var registryAccessToken = null;
 
 var namesOfStatusCodes = Object.keys(statusCode);
 
@@ -44,7 +43,6 @@ const timeoutField = "timeoutMinutes";
 const debugModeField = "debugMode";
 const failOnConnectionError = "failOnConnectionError";
 const connectionRetriesName = "connectionRetries";
-const registryAccessTokenName = "registryAccessToken";
 
 var finish = function () {
     //TODO: rename/remove shrinkwrap file to avoid npm to use hardcoded versions.
@@ -423,9 +421,6 @@ cli.main(function (args, options) {
     if (confJson.hasOwnProperty(connectionRetriesName)) {
         connectionRetries = confJson.connectionRetries;
     }
-    if (confJson.hasOwnProperty(registryAccessTokenName)) {
-        registryAccessToken = confJson.registryAccessToken;
-    }
     cli.ok('Config file is located in: ' + confPath);
     var devDepMsg = 'If you have installed Dev Dependencies and like to include them in the WhiteSource report,\n add devDep flag to the whitesource.config file to continue.'
     var missingPackageJsonMsg = 'Missing Package.json file. \n whitesource requires a valid package.json file to proceed';
@@ -466,7 +461,7 @@ cli.main(function (args, options) {
                 cli.ok('Done calculation dependencies!');
 
                 var lsResult = JSON.parse(fs.readFileSync(pathOfNpmLsFile, 'utf8'));
-                WsNodeReportBuilder.traverseLsJson(lsResult, registryAccessToken)
+                WsNodeReportBuilder.traverseLsJson(lsResult)
                     .then(function (json) {
                         deleteNpmLsAndFolderIfNotDebugMode();
                         if (isDebugMode) {
